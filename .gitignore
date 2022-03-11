@@ -1,4 +1,5 @@
 .yarn
 .env
 .pnp.cjs
+/cache
 artifacts*
