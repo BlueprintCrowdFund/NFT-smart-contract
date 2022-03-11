@@ -22,6 +22,10 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   // users pay (no of weeks * baseprice)
   uint private PRICE;
 
+  // IMPORTANT
+  // variable used to prevent race conditions / TOA
+  uint256 private TXCOUNTER;
+
   // We'll be storing our NFT images on chain as SVGs
   string svgPartOne = '<svg>';
   string svgPartTwo = '</svg>';
@@ -53,9 +57,13 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   // keep track of campaigns
   mapping (uint => Campaign) campaigns;
 
+  // EVENTS
+  event PriceChanged(address _owner, uint256 _price);
+
   // make contract is payable and ownable
   constructor(uint price) payable Ownable() ERC721("Blueprint DAO", "BDAO") {
     PRICE = price;
+    TXCOUNTER = 0;
   }
 
   // ensure campaign does not already exist
@@ -100,6 +108,10 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     _;
   }
 
+  function getTxCounter() public view returns (uint256){
+    return TXCOUNTER;
+  }
+
   function getPrice(uint endDate) public view returns (uint256) {
     uint numDays = (endDate - block.timestamp) / 60 / 60 / 24;
     uint cost = numDays * PRICE; // base price of 0.5 eth
@@ -139,6 +151,19 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
 
     return string( abi.encodePacked("data:application/json;base64,", json));
   }
+
+  /** register campaign to user address
+  * @param campaignName name of campaign
+  * @param endDate date to end campaign
+  */
+  function register(
+    string calldata campaignName,
+    uint endDate,
+    uint256 txCounter
+    ) public payable campaignNameNotExists(campaignName) hasFunds(endDate) {
+
+    // prevent TOA
+    require(txCounter == getTxCounter(), 'Contract updated during transaction');
 
     // validate length of campaign name
     if (!valid(campaignName)) revert InvalidCampaignName(campaignName);
@@ -185,6 +210,14 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     return allNames;
   }
 
+  // allow owner to update price
+  function setPrice(uint newPrice) public onlyOwner {
+    require(newPrice != PRICE, "Given price is not different from current price");
+
+    PRICE = newPrice;
+    TXCOUNTER++;
+    emit PriceChanged(owner(), PRICE);
+  }
 
   // allow only owner to withdraw
   function withdraw() public onlyOwner {

@@ -29,12 +29,16 @@ const main = async () => {
   console.log("Contract balance before :", hre.ethers.utils.formatEther(contractBalance));
   console.log("Balance of owner before:", hre.ethers.utils.formatEther(ownerBalance));
 
+  // anti TOA counter
+  let txCounter = await contract.getTxCounter();
+
   // register a new domain
   // and provide registration payment
   let txn = await Promise.all(
     mycampaigns.map(async campaign => {
       await contract.register(
         ...Object.values(campaign),
+        txCounter,
         { value: hre.ethers.utils.parseEther('0.45') }
       );
     })
