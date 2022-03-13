@@ -34,7 +34,8 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   struct Campaign {
     string name;
     uint256 budget;
-    uint startDate; //date when campaign begins / can be issued
+    uint iAtDate; // date campaign has been issued
+    uint startDate; // date when campaign will begins
     uint endDate; // date when capaign gets expired
     bool isRedeemed;
     string nftTier1;
@@ -46,7 +47,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   error AlreadyRegistered();
   error InsufficientBalance(uint256 _available, uint256 _required);
   error InvalidCampaignName(string name);
-  error InvalidCampaignDuration();
+  error InvalidCampaignDates(uint minStartDate, uint minEndDate);
 
   // campaigns count
   uint8 campaignCount;
@@ -89,12 +90,17 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   }
 
   /** make sure user has sufficient funds to pay price for the campaign
+  * and ensures endate is at least within 1 week
   * total price = base price * duration (in days) 7 days minimum
   * @param endDate desired campaign end date
   */
-  modifier hasFunds(uint endDate) {
-    // make end date is in at least 1 week
-    if (endDate < (block.timestamp + 7 days)) revert InvalidCampaignDuration();
+  modifier hasFunds(uint startDate, uint endDate) {
+    // calculate difference in start and end date inclusively
+    uint diff = 1 + (endDate - startDate) / 60 / 60 / 24;
+    if (block.timestamp >= startDate || block.timestamp >= endDate || diff < 7) revert InvalidCampaignDates({
+      minStartDate: block.timestamp + 1 days,
+      minEndDate: block.timestamp + 8 days
+    });
 
     uint256 _price = getPrice(endDate);
     console.log("this txn will cost %d", _price);
@@ -113,7 +119,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   }
 
   function getPrice(uint endDate) public view returns (uint256) {
-    uint numDays = (endDate - block.timestamp) / 60 / 60 / 24;
+    uint numDays = 1 + (endDate - block.timestamp) / 60 / 60 / 24;
     uint cost = numDays * PRICE; // base price of 0.5 eth
     return (cost * 10**16);
   }
@@ -154,13 +160,15 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
 
   /** register campaign to user address
   * @param campaignName name of campaign
+  * @param startDate date to start campaign
   * @param endDate date to end campaign
   */
   function register(
     string calldata campaignName,
+    uint startDate,
     uint endDate,
     uint256 txCounter
-    ) public payable campaignNameNotExists(campaignName) hasFunds(endDate) {
+    ) public payable campaignNameNotExists(campaignName) hasFunds(startDate, endDate) {
 
     // prevent TOA
     require(txCounter == getTxCounter(), 'Contract updated during transaction');
@@ -186,6 +194,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
       campaignName,
       msg.value,
       block.timestamp,
+      startDate,
       endDate,
       false,
       "",
