@@ -75,7 +75,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   /** ensure campaign does already exist
   * @param campaignName name of campaign
   */
-  modifier camapaignExists(string calldata campaignName) {
+  modifier campaignExists(string calldata campaignName) {
     if (campaign2Owner[campaignName] != address(0)) revert Unauthorized();
     _;
   }
@@ -196,7 +196,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     _tokenIds.increment();
   }
 
-   // get list of all campaigns names
+  // get list of all campaigns names
   function getCampaigns() public view returns (Campaign[] memory) {
     console.log("Getting all campaigns from contract...");
 
