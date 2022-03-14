@@ -32,6 +32,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
 
   // Campaigns
   struct Campaign {
+    uint256 id;
     string name;
     uint256 budget;
     uint iAtDate; // date campaign has been issued
@@ -56,7 +57,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   mapping (string => address) private campaign2Owner;
 
   // keep track of campaigns
-  mapping (uint => Campaign) campaigns;
+  mapping (uint => Campaign) private _campaigns;
 
   // EVENTS
   event PriceChanged(address _owner, uint256 _price);
@@ -190,7 +191,8 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     campaign2Owner[campaignName] = msg.sender;
     campaignCount++;
 
-    campaigns[newRecordId] = Campaign(
+    _campaigns[newRecordId] = Campaign(
+      newRecordId,
       campaignName,
       msg.value,
       block.timestamp,
@@ -212,11 +214,16 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     Campaign[] memory allNames = new Campaign[](_tokenIds.current());
 
     for (uint i = 0; i < _tokenIds.current(); i++) {
-      allNames[i] = campaigns[i];
+      allNames[i] = _campaigns[i];
       console.log("Name for token %d is %s", i, allNames[i].name);
     }
 
     return allNames;
+  }
+
+  // get info about a single campaign
+  function getCampaign(uint256 campaignId) public view returns (Campaign memory) {
+    return _campaigns[campaignId];
   }
 
   // allow owner to update price
