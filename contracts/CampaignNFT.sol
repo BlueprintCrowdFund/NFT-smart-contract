@@ -32,6 +32,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
 
   // Campaigns
   struct Campaign {
+    uint256 id;
     string name;
     uint256 budget;
     uint iAtDate; // date campaign has been issued
@@ -218,6 +219,11 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     }
 
     return allNames;
+  }
+
+  // get info about a single campaign
+  function getCampaign(uint256 campaignId) public view returns (Campaign memory) {
+    return _campaigns[campaignId];
   }
 
   // allow owner to update price
