@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.4;
 
 // This constract is for creating NFT's for the Bluepring DAO on behalf of
 // the registering startup companies
@@ -20,11 +20,11 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
 
   // set base price
   // users pay (no of weeks * baseprice)
-  uint private PRICE;
-
+  uint private price;
+  uint private maxNum;
   // IMPORTANT
   // variable used to prevent race conditions / TOA
-  uint256 private TXCOUNTER;
+  uint256 private txCounter;
 
   // We'll be storing our NFT images on chain as SVGs
   string svgPartOne = '<svg>';
@@ -57,28 +57,21 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   mapping (string => address) private campaign2Owner;
 
   // keep track of campaigns
-  mapping (uint => Campaign) private _campaigns;
+  mapping (uint => Campaign) private campaigns;
 
   // EVENTS
   event PriceChanged(address _owner, uint256 _price);
 
   // make contract is payable and ownable
-  constructor(uint price) payable Ownable() ERC721("Blueprint DAO", "BDAO") {
-    PRICE = price;
-    TXCOUNTER = 0;
+  constructor(uint _price, uint _maxNum) payable Ownable() ERC721("Blueprint DAO", "BDAO") {
+    price = _price;
+    txCounter = 0;
+    maxNum = _maxNum;
   }
 
   // ensure campaign does not already exist
   modifier campaignNameNotExists(string calldata campaignName) {
     if(campaign2Owner[campaignName] != address(0)) revert AlreadyRegistered() ;
-    _;
-  }
-
-  /** ensure campaign does already exist
-  * @param campaignName name of campaign
-  */
-  modifier campaignExists(string calldata campaignName) {
-    if (campaign2Owner[campaignName] != address(0)) revert Unauthorized();
     _;
   }
 
@@ -97,8 +90,9 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   */
   modifier hasFunds(uint startDate, uint endDate) {
     // calculate difference in start and end date inclusively
-    uint diff = 1 + (endDate - startDate) / 60 / 60 / 24;
-    if (block.timestamp >= startDate || block.timestamp >= endDate || diff < 7) revert InvalidCampaignDates({
+    require(startDate + 1 weeks >= endDate, "Minumum period 1 week");
+    require(endDate - startDate <= 6 weeks, "Maximum period 6 weeks");
+    if (block.timestamp >= startDate || block.timestamp >= endDate) revert InvalidCampaignDates({
       minStartDate: block.timestamp + 1 days,
       minEndDate: block.timestamp + 8 days
     });
@@ -115,13 +109,13 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     _;
   }
 
-  function getTxCounter() public view returns (uint256){
-    return TXCOUNTER;
+  function gettxCounter() public view returns (uint256){
+    return txCounter;
   }
 
   function getPrice(uint endDate) public view returns (uint256) {
     uint numDays = 1 + (endDate - block.timestamp) / 60 / 60 / 24;
-    uint cost = numDays * PRICE; // base price of 0.5 eth
+    uint cost = numDays * price; // base price of 0.5 eth
     return (cost * 10**16);
   }
 
@@ -168,14 +162,15 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     string calldata campaignName,
     uint startDate,
     uint endDate,
-    uint256 txCounter
+    uint256 _txCounter
     ) public payable campaignNameNotExists(campaignName) hasFunds(startDate, endDate) {
 
     // prevent TOA
-    require(txCounter == getTxCounter(), 'Contract updated during transaction');
+    require(_txCounter == gettxCounter(), "Contract updated during transaction");
 
     // validate length of campaign name
     if (!valid(campaignName)) revert InvalidCampaignName(campaignName);
+    require(_tokenIds.current() <= maxNum, "maxmim no of nft reached");
 
     uint256 newRecordId = _tokenIds.current();
 
@@ -191,7 +186,7 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
     campaign2Owner[campaignName] = msg.sender;
     campaignCount++;
 
-    _campaigns[newRecordId] = Campaign(
+    campaigns[newRecordId] = Campaign(
       newRecordId,
       campaignName,
       msg.value,
@@ -208,31 +203,26 @@ contract CampaignNFT is Ownable, ERC721URIStorage {
   }
 
   // get list of all campaigns names
-  function getCampaigns() public view returns (Campaign[] memory) {
+  function getCampaigns() public view returns (Campaign[] memory _campaigns) {
     console.log("Getting all campaigns from contract...");
 
-    Campaign[] memory allNames = new Campaign[](_tokenIds.current());
-
     for (uint i = 0; i < _tokenIds.current(); i++) {
-      allNames[i] = _campaigns[i];
-      console.log("Name for token %d is %s", i, allNames[i].name);
+      _campaigns[i] = campaigns[i];
+      console.log("Name for token %d is %s", i, _campaigns[i].name);
     }
-
-    return allNames;
   }
 
   // get info about a single campaign
   function getCampaign(uint256 campaignId) public view returns (Campaign memory) {
-    return _campaigns[campaignId];
+    return campaigns[campaignId];
   }
 
   // allow owner to update price
   function setPrice(uint newPrice) public onlyOwner {
-    require(newPrice != PRICE, "Given price is not different from current price");
-
-    PRICE = newPrice;
-    TXCOUNTER++;
-    emit PriceChanged(owner(), PRICE);
+    require(newPrice != price, "same price");
+    price = newPrice;
+    txCounter++;
+    emit PriceChanged(owner(), price);
   }
 
   // allow only owner to withdraw
